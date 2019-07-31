@@ -1,0 +1,79 @@
+version: "3"
+
+services:
+
+  web:
+    image: saniaky/planner-ui:latest
+    container_name: web
+    depends_on:
+      - nginx-proxy
+      - nginx-letsencrypt
+    environment:
+      VIRTUAL_HOST: loyola-planner.club
+      LETSENCRYPT_HOST: loyola-planner.club
+      LETSENCRYPT_EMAIL: contact@loyola-planner.club
+
+  api:
+    image: saniaky/planner-api:latest
+    restart: always
+    container_name: api
+    depends_on:
+      - db
+    environment:
+      - DB_HOST
+      - DB_NAME
+      - DB_USER
+      - DB_PASSWORD
+
+  db:
+    image: mysql:5.7.25
+    restart: always
+    container_name: db
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+    volumes:
+      - volume-db:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "${DB_NAME}"
+      MYSQL_USER: "${DB_USER}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    restart: always
+    container_name: nginx-proxy
+    ports: ["80:80", "443:443"]
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./nginx/vhost.d:/etc/nginx/vhost.d                   # to change the configuration of vhosts (needed by Let's Encrypt)
+      - ./nginx/custom.conf:/etc/nginx/conf.d/custom.conf:ro # client_max_body_size 64m;
+      - ./nginx/certs:/etc/nginx/certs                       # to create/renew Let's Encrypt certificates
+      - ./nginx/html:/usr/share/nginx/html                   # to write challenge files.
+    labels:
+      com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy: "true"
+
+  nginx-letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    restart: always
+    container_name: nginx-letsencrypt
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./nginx/vhost.d:/etc/nginx/vhost.d    # to change the configuration of vhosts (needed by Let's Encrypt)
+      - ./nginx/certs:/etc/nginx/certs        # to create/renew Let's Encrypt certificates
+      - ./nginx/html:/usr/share/nginx/html    # to write challenge files
+
+  watchtower:
+    image: v2tec/watchtower
+    restart: always
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 60 --cleanup
+
+volumes:
+  volume-db:
+    external: true
+
+
+
